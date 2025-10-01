@@ -104,8 +104,13 @@ class VCardQRGenerator {
         const email = (data.email || '').trim();
         const phone = (data.phone || data['business phone number'] || '').trim();
         const organization = (data.organization || data.org || '').trim();
-        const website = (data.website || data.url || '').trim();
+        let website = (data.website || data.url || '').trim();
         const address = (data.address || data.addr || '').trim();
+        
+        // Add http:// to website if not present
+        if (website && !website.match(/^https?:\/\//i)) {
+            website = 'https://' + website;
+        }
         
         // Parse name into first and last name
         let firstName = '';
@@ -126,19 +131,16 @@ class VCardQRGenerator {
             'VERSION:3.0'
         ];
         
-        // N field (structured name) is required - format: LastName;FirstName;MiddleNames;Prefix;Suffix
-        if (firstName || lastName) {
-            vcardLines.push(`N:${lastName};${firstName};;;`);
-        }
+        // N field (structured name) is REQUIRED for proper name saving
+        // Format: LastName;FirstName;MiddleNames;Prefix;Suffix
+        vcardLines.push(`N:${lastName};${firstName};;;`);
         
-        // FN field (formatted/display name) is required
-        if (name) {
-            vcardLines.push(`FN:${name}`);
-        }
+        // FN field (formatted/display name) is REQUIRED
+        vcardLines.push(`FN:${name || firstName + ' ' + lastName}`);
         
-        // Organization field - use proper format with semicolon separator
+        // Organization - critical for contact apps to recognize company
         if (organization) {
-            vcardLines.push(`ORG:${organization};`);
+            vcardLines.push(`ORG:${organization}`);
         }
         
         // Title/Position
@@ -146,26 +148,45 @@ class VCardQRGenerator {
             vcardLines.push(`TITLE:${title}`);
         }
         
-        // Contact information
+        // Phone - using standard format for better compatibility
         if (phone) {
             vcardLines.push(`TEL;TYPE=WORK,VOICE:${phone}`);
+            // Add a CELL type as well for mobile recognition
+            vcardLines.push(`TEL;TYPE=CELL:${phone}`);
         }
         
+        // Email - work email
         if (email) {
-            vcardLines.push(`EMAIL;TYPE=WORK:${email}`);
+            vcardLines.push(`EMAIL;TYPE=INTERNET,WORK:${email}`);
         }
         
+        // Address - properly formatted for maximum compatibility
+        // Format: ADR;TYPE=WORK:;;street;city;state;postal;country
         if (address) {
             vcardLines.push(`ADR;TYPE=WORK:;;${address};;;;`);
+            // Also add as LABEL for better display
+            vcardLines.push(`LABEL;TYPE=WORK:${address}`);
         }
         
+        // Website URL - with proper formatting
         if (website) {
-            vcardLines.push(`URL:${website}`);
+            vcardLines.push(`URL;TYPE=WORK:${website}`);
+        }
+        
+        // Add NOTE field with all details for maximum compatibility
+        const noteDetails = [];
+        if (organization) noteDetails.push(`Organization: ${organization}`);
+        if (title) noteDetails.push(`Title: ${title}`);
+        if (website) noteDetails.push(`Website: ${website}`);
+        if (address) noteDetails.push(`Address: ${address}`);
+        
+        if (noteDetails.length > 0) {
+            vcardLines.push(`NOTE:${noteDetails.join(' | ')}`);
         }
         
         vcardLines.push('END:VCARD');
         
-        const vcard = vcardLines.join('\n');
+        const vcard = vcardLines.join('\r\n'); // Use \r\n for better compatibility
         console.log(`Generated vCard for ${name}:`, vcard);
         return vcard;
     }
